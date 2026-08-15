@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SslProxyingSettings, UpstreamProxySettings } from "@aiproxy/shared-types";
 
 import {
   createWorkspace,
@@ -55,6 +56,16 @@ export function useUpdateWorkspace() {
       verifyUpstreamTls?: boolean;
       /** H3: hostnames always TLS-verified (array form). */
       tlsVerifyHosts?: string[];
+      /**
+       * Upstream (chained) proxy settings. Takes effect on the next proxy
+       * start/restart.
+       */
+      upstreamProxy?: UpstreamProxySettings;
+      /**
+       * Per-host SSL proxying policy. Takes effect on the next proxy
+       * start/restart.
+       */
+      sslProxying?: SslProxyingSettings;
     }) => updateWorkspace(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
