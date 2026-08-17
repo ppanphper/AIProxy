@@ -1111,7 +1111,7 @@ export const enMessages = {
     },
     conflictTitle: "When the same file was requested more than once",
     layoutHint:
-      "Folders mirror the host and URL path; a missing extension is derived from the response type. WebSocket sessions and requests without a response body are skipped.",
+      "Folders mirror the URL path below the host; a missing extension is derived from the response type. WebSocket sessions and requests without a response body are skipped.",
     messages: {
       nothingSaved: "There was nothing to save.",
       saved: "Saved {{count}} files to {{directory}}.",

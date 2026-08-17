@@ -1062,7 +1062,7 @@ export const zhCNMessages: Messages = {
     },
     conflictTitle: "同一个文件被多次请求时",
     layoutHint:
-      "按 host 和 URL 路径还原目录层级；URL 没有扩展名时按响应类型补全。WebSocket 会话和没有响应内容的请求会自动跳过。",
+      "按域名以下的 URL 路径还原目录层级，不额外创建域名目录；URL 没有扩展名时按响应类型补全。WebSocket 会话和没有响应内容的请求会自动跳过。",
     messages: {
       nothingSaved: "没有可保存的文件。",
       saved: "已保存 {{count}} 个文件到 {{directory}}。",
