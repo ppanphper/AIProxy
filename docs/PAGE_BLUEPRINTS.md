@@ -106,6 +106,7 @@ SessionsPage
 │  └─ Export Button
 ├─ Main Split Workspace
 │  ├─ SessionExplorerPane
+│  │  ├─ SessionFilterChips（生效中的 focus / ignore / throttled 过滤 chips，点 × 移除；无过滤不渲染）
 │  │  ├─ HostRow
 │  │  ├─ SessionTreeNode
 │  │  └─ SessionLeafNode
@@ -132,6 +133,7 @@ SessionsPage
 |------|------|
 | `pages/sessions/index.tsx` | SessionsPage 主页面，组合搜索、导出、上下文菜单、详情与跳转动作 |
 | `features/sessions/components/SessionExplorerPane.tsx` | Host 树（路径分支节点统一使用 Folder Icon，不再区分展开/折叠态）、请求节点、右键入口 |
+| `features/sessions/components/SessionFilterChips.tsx` | 列表上方的单行可移除过滤 chips：每个 focused/ignored host 一枚（点 × 取消），同一类别超过 3 个 host 时聚合为"Focus/Ignored (N)"总 chip（菜单内可逐项移除/全部清除），throttled 过滤一枚总开关；被 ignore 的 host 从数据滤除后右键菜单不可达，此行是唯一取消入口 |
 | `features/sessions/components/SessionInspectorWorkspace.tsx` | 请求 / 响应详情工作区，支持搜索与 Repeat 摘要动作 |
 | `features/sessions/components/SessionInspectorMediaPreview.tsx` | 响应体多媒体预览（图片/音频/视频），按 MIME 类型动态显示，支持右键复制图片/另存为/复制地址/在浏览器中打开 |
 | `features/sessions/components/SessionContextMenu.tsx` | 会话右键菜单，承载复制、导出、重放、Host 操作与页面跳转 |
@@ -186,12 +188,19 @@ type SessionsPageState = {
 Sessions polling returns captured sessions
 -> SessionsPage filters ignored hosts
 -> SessionExplorerPane groups remaining sessions by host and path
+-> SessionFilterChips renders one removable chip per focused/ignored host
+   and a throttled-only toggle chip (renders nothing when no filter active)
 -> user searches / expands host / selects session
 -> SessionInspectorWorkspace renders selected summary and tabs
 -> user drags split handle
 -> explorer width updates and persists to localStorage
 -> user toggles request panel collapse
 -> requestCollapsed persists to localStorage
+-> user clicks "Clear Session" (header) or menu "Clear All Sessions"
+-> ConfirmDialog requires explicit confirmation (unless skipClearSessionsConfirm preference is on,
+   in which case clearing fires immediately; opt-out is only offered in this dialog and can be
+   re-enabled in Settings)
+-> clear_sessions mutation succeeds -> sessions cache cleared + Snackbar
 ```
 
 **事件批处理（M1）：** `SessionsPage` 现在直接订阅会话事件，使用 100ms 批处理缓冲区。`useSessionEvents` hook 已废弃。单次批处理刷新中，容器状态和 React Query 缓存同时更新。
@@ -327,11 +336,15 @@ UI 布局：
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Title: Compose                                          (Send) (Export cURL) │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ [Request Builder]                                  │ [Response Preview]       │
-│ <GET▼> [https://example.com/api..............]    │ Status • Duration • Size │
-│ [Headers] [Body] [Query]                          │ <Overview> <Headers>     │
-│ [EditableKeyValueTable / TextField]               │ <Body> <Timing>          │
-│                                                    │ [Inspector content]      │
+│ [Request Builder]                                                            │
+│ <GET▼> [https://example.com/api..............]                              │
+│ [Headers] [Body] [Query]                                                     │
+│ Body: (none | form-data | x-www-form-urlencoded | raw)  [raw 时: 语言选择▼]   │
+│       EditableKeyValueTable（键值对） / multiline TextField（raw）             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [Response Preview]                                                           │
+│ Status • Duration • Size                                                     │
+│ <Overview> <Headers> <Body> …（复用 Sessions Inspector 响应标签集合）         │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -341,21 +354,20 @@ UI 布局：
 ComposePage
 ├─ PageHeader (title + description)
 ├─ Toolbar (Send button + Export cURL button)
-├─ Two-column grid (8fr | 4fr)
+├─ 垂直分栏（请求在上、响应在下，各自内部滚动）
 │  ├─ SectionCard "Request Builder"
 │  │  ├─ MethodSelect (GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS)
 │  │  ├─ UrlInput (OutlinedInput, Enter 键触发发送)
 │  │  ├─ Tabs: Headers | Body | Query
 │  │  │  ├─ Headers: EditableKeyValueTable
-│  │  │  ├─ Body: TextField multiline
+│  │  │  ├─ Body: ToggleButtonGroup (none | form-data | x-www-form-urlencoded | raw)
+│  │  │  │  ├─ none: 空态提示
+│  │  │  │  ├─ form-data / x-www-form-urlencoded: EditableKeyValueTable
+│  │  │  │  └─ raw: 语言 Select (Text/JSON/XML/HTML/JavaScript) + multiline TextField
 │  │  │  └─ Query: EditableKeyValueTable (自动从 URL 解析)
 │  └─ SectionCard "Response Preview"
 │     ├─ InspectorSummaryBar (复用 Sessions Inspector 组件)
-│     ├─ Tabs: Overview | Headers | Body | Timing
-│     │  ├─ Overview: InspectorDefinitionList
-│     │  ├─ Headers: InspectorKeyValueTable
-│     │  ├─ Body: SearchableCodeBlock
-│     │  └─ Timing: InspectorDefinitionList
+│     └─ Tabs 复用 Sessions Inspector 的响应标签集合（Overview / Headers / Body / Timing 等）
 ```
 
 ### 5.4 实现文件映射
@@ -364,9 +376,12 @@ ComposePage
 |------|------|
 | `pages/compose/index.tsx` | ComposePage 主页面 |
 | `features/compose/use-compose-request.ts` | React Query mutation，调用 `sendComposedRequest` |
-| `features/compose/compose-editor.store.ts` | Zustand store，管理 method/url/headers/body/activeTab |
+| `features/compose/compose-editor.store.ts` | Zustand store，管理 method/url/headers/body/bodyType/rawLanguage/activeTab |
+| `features/compose/types.ts` | `BodyType`（none/formdata/urlencoded/raw）、`RawLanguage` 等类型 |
 | `features/compose/curl-export.ts` | 纯函数 `generateCurlCommand()`，前端生成 cURL 命令 |
-| `features/compose/components/EditableKeyValueTable.tsx` | 可编辑键值对组件（Headers/Query 共用） |
+| `features/compose/components/ComposeRequestSection.tsx` | 请求构造区（含 body 类型切换） |
+| `features/compose/components/ComposeResponseSection.tsx` | 响应预览区（复用 Inspector） |
+| `features/compose/components/EditableKeyValueTable.tsx` | 可编辑键值对组件（Headers/Query/form-data 共用） |
 
 ### 5.5 页面状态模型
 
@@ -376,10 +391,15 @@ type ComposeEditorState = {
   method: string;           // 默认 "GET"
   url: string;
   headers: HeaderEntry[];
-  body: string;
+  body: string;             // raw 模式的文本内容
+  bodyType: BodyType;       // "none" | "formdata" | "urlencoded" | "raw"，默认 "none"
+  rawLanguage: RawLanguage; // raw 模式的语言（text/json/xml/html/javascript），默认 "json"
+  formDataEntries: HeaderEntry[];        // form-data 键值对
+  urlEncodedEntries: HeaderEntry[];      // x-www-form-urlencoded 键值对
   activeTab: "headers" | "body" | "query";
-  setMethod / setUrl / setHeaders / setBody / setActiveTab
-  loadFromSession(data)     // Repeat 按钮调用，预填数据
+  setMethod / setUrl / setHeaders / setBody / setBodyType / setRawLanguage
+  setFormDataEntries / setUrlEncodedEntries / setActiveTab
+  loadFromSession(data)     // Repeat 按钮调用，预填数据（含 bodyType 等字段）
   reset()                   // 重置为初始状态
 };
 
@@ -775,8 +795,9 @@ type CertificatesPageState = {
 
 - 管理代理预设（端口、SSL）
 - 配置上游（链式）代理
-- 管理界面语言偏好
-- 管理界面外观偏好
+- 配置 SSL Proxying 包含/排除列表
+- 在「General」区统一管理语言、主题、界面字体、内容字体与字号偏好
+- 管理危险操作确认开关（Clear All Sessions 确认可关闭并在此恢复）
 - 支持 `system` 级别的自动解析与持久化
 
 ### 8.2 低保真线框
@@ -803,12 +824,20 @@ type CertificatesPageState = {
 │ Exclude (multiline)                                                         │
 │ Pinning Hint / SSL-Disabled Hint                                            │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ [Language & Region]                                                         │
-│ Display Language: [Follow System v]                                         │
-│ Info Hint                                                                   │
+│ [General]  (macOS 风格分组行，Divider 分隔，控件右对齐)                       │
+│ Display Language                        [Follow System v]                   │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Appearance Theme                        [Follow System v]                   │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Interface Font                          [System Default v]                  │
+│ (custom 时追加 Custom Font 行)                                               │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Content & Code Font                     [System Monospace v]                │
+│ ─────────────────────────────────────────────────────────────────────────── │
+│ Font Size                               [14px v]                            │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ [Appearance]                                                                │
-│ Appearance Theme: [Follow System v]                                         │
+│ [Dangerous Action Confirmations]                                            │
+│ Ask before clearing all sessions                    [========○]             │
 │ Info Hint                                                                   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -830,15 +859,24 @@ SettingsPage
 │  ├─ BypassTextarea
 │  ├─ TestConnectionButton
 │  └─ ProbeResultAlert / NoFallbackAlert / CredentialStorageAlert
-├─ SectionCard "Language & Region"
+├─ SslProxyingSection
+│  ├─ ModeHint
+│  ├─ IncludeTextarea / ExcludeTextarea
+│  ├─ RestoreRecommendedButton / SaveButton
+│  └─ PinningAlert / SslDisabledAlert
+├─ SectionCard "General"
+│  └─ SettingsGroup (Divider 分隔)
+│     ├─ SettingsRow LanguagePreferenceSelect
+│     ├─ SettingsRow ThemePreferenceSelect
+│     ├─ SettingsRow FontFamilyPreferenceSelect (+ custom 行)
+│     ├─ SettingsRow ContentFontPreferenceSelect (+ custom 行)
+│     └─ SettingsRow FontSizeSelect
+├─ SectionCard "Dangerous Action Confirmations"
 │  ├─ Description
-│  ├─ LanguagePreferenceSelect
-│  └─ EffectiveLanguageAlert
-├─ SectionCard "Appearance"
-│  ├─ Description
-│  ├─ ThemePreferenceSelect
-│  └─ EffectiveThemeAlert
+│  └─ ClearSessionsConfirmSwitch (bound to !skipClearSessionsConfirm)
 ```
+
+**行组件约定：** `SettingsRow`（label/description 左、控件右，`stacked` 用于 TLS hosts 等宽输入）、`SettingsGroup`（Divider 分隔行列表）、`SettingsFooter`（hint 左、动作右）是 Settings 页统一的行级布局原语，各 Section 内部一律复用，不再手写行布局。
 
 ### 8.4 页面状态模型
 
@@ -867,6 +905,7 @@ type SettingsPageState = {
   preferences: {
     languagePreference: "system" | "zh-CN" | "en";
     themePreference: "system" | "light" | "dark";
+    skipClearSessionsConfirm: boolean; // "don't ask again" from the Clear All Sessions dialog
   };
   derived: {
     resolvedLocale: "zh-CN" | "en";
@@ -1252,14 +1291,14 @@ User clicks Export dropdown
 | Settings | `settings`, `workspace-manager` | settings service / local config + Proxy Presets section；`list_workspaces` (已实现), `create_workspace` (已实现), `load_workspace` (已实现), `update_workspace` (已实现), `test_upstream_proxy` (已实现) |
 | Insights | `insights` | `get_insights` (已实现) |
 
-## 11. 实现建议
+## 12. 实现建议
 
 - 先按页面蓝图搭稳定的 `layout + feature + shared component` 骨架
 - 页面级状态与服务调用放入 `features/*`
 - 页面容器只负责拼装，不承载复杂业务逻辑
 - 所有分栏页优先实现拖拽宽度记忆和空状态统一策略
 
-## 12. Setup Wizard & Setup Checklist — 首启引导
+## 13. Setup Wizard & Setup Checklist — 首启引导
 
 ### 12.1 目标
 
@@ -1305,7 +1344,7 @@ nextAction        = [certGenerated, certTrusted, proxyRunning, systemProxyOrManu
 - 结束占用进程并重启:端口对话框(占用场景,标题「解决端口冲突」+ `Divider` 两路径)查 `get_port_occupant` 展示 `进程名 · PID` → MUI 二次确认 → `kill_proxy_port_process`(后端 re-verify PID 防 TOCTOU,失败含 `PROCESS_CHANGED`)→ 用 `retryWhilePortInUse`(`proxy-start.helpers`)带退避重试 `start_proxy`(SIGKILL 异步、端口释放有 race,默认 5 次 × 300ms)→ 成功则关对话框 + `clearPortInUse`;失败关确认窗回端口对话框、走 snackbar 并重查占用者。
 - 命令层 `reportCommandFailure` 仅记日志;全局 snackbar 与页面级 Alert 不重复表达(引导链路内以页面级为权威)。
 
-## 13. Docs Page — 应用内文档查看器 `已实现`
+## 14. Docs Page — 应用内文档查看器 `已实现`
 
 入口：Help → AIProxy 文档（macOS 原生菜单与 Windows/Linux 自定义菜单收敛到同一 `case "documentation" → navigate("/docs")`）。把 `apps/desktop/user-guides/` 的用户指南在构建时打包进应用，离线浏览，不进入左侧主导航。
 

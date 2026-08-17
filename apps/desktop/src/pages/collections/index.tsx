@@ -1,3 +1,4 @@
+import DriveFileRenameOutlineRoundedIcon from "@mui/icons-material/DriveFileRenameOutlineRounded";
 import {
   Box,
   Button,
@@ -5,12 +6,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Snackbar,
   TextField,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import {
   useCallback,
   useEffect,
@@ -37,6 +40,7 @@ import {
   INSPECTOR_SPLIT_RATIO_STORAGE_KEY,
   REQUEST_COLLAPSED_STORAGE_KEY,
 } from "@/features/collections/collections-layout.helpers";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { CollectionEditorPane } from "@/features/collections/components/CollectionEditorPane";
 import { CollectionTreePane } from "@/features/collections/components/CollectionTreePane";
 import type { CollectionEditorItem } from "@/features/collections/components/tree-types";
@@ -66,11 +70,18 @@ import {
   DEFAULT_REQUEST_SPLIT_RATIO,
   clampInspectorSplitRatio,
 } from "@/features/sessions/components/session-inspector.helpers";
+import {
+  buildContextMenuSlotProps,
+  contextMenuItemTextProps,
+  getContextMenuIconSx,
+  getContextMenuItemSx,
+} from "@/features/sessions/components/context-menu.styles";
 import { readStorageValue, writeStorageValue } from "@/features/sessions/session-ui.helpers";
 import { useI18n } from "@/i18n";
 
 export function CollectionsPage() {
   const { t } = useI18n();
+  const theme = useTheme();
 
   // --- Data queries ---
 
@@ -138,6 +149,12 @@ export function CollectionsPage() {
   const [newCollectionParentId, setNewCollectionParentId] = useState<string | null>(null);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [manageEnvDialogOpen, setManageEnvDialogOpen] = useState(false);
+  // Destructive deletes are confirmed first; the target drives the dialog copy.
+  const [deleteCollectionConfirm, setDeleteCollectionConfirm] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteItemConfirm, setDeleteItemConfirm] = useState<CollectionEditorItem | null>(null);
 
   // --- Tree hook (DnD, context menu, rename, expansion) ---
 
@@ -459,8 +476,13 @@ export function CollectionsPage() {
         onNewRequest={handleCreateRequest}
         onSelectCollection={handleSelectCollection}
         onSelectItem={handleSelectItem}
-        onDeleteCollection={treeHook.handleDeleteCollection}
-        onDeleteItem={treeHook.handleDeleteItem}
+        onDeleteCollection={(id) =>
+          setDeleteCollectionConfirm({
+            id,
+            name: collections.find((collection) => collection.id === id)?.name ?? "",
+          })
+        }
+        onDeleteItem={(item) => setDeleteItemConfirm(item)}
         onToggleExpand={treeHook.handleToggleExpand}
         selectedCollectionId={selectedCollectionId}
         selectedItemId={selectedItemId}
@@ -532,8 +554,14 @@ export function CollectionsPage() {
         anchorReference="anchorPosition"
         onClose={treeHook.handleTreeMenuClose}
         open={Boolean(treeHook.treeMenuState)}
+        slotProps={buildContextMenuSlotProps(160)}
       >
-        <MenuItem onClick={treeHook.handleBeginRename}>{t("collectionsPage.rename")}</MenuItem>
+        <MenuItem onClick={treeHook.handleBeginRename} sx={getContextMenuItemSx(theme)}>
+          <ListItemIcon sx={getContextMenuIconSx(theme)}>
+            <DriveFileRenameOutlineRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText {...contextMenuItemTextProps}>{t("collectionsPage.rename")}</ListItemText>
+        </MenuItem>
       </Menu>
 
       <Dialog
@@ -621,6 +649,36 @@ export function CollectionsPage() {
         message={treeHook.moveError ?? ""}
         onClose={() => treeHook.setMoveError(null)}
         open={treeHook.moveError !== null}
+      />
+
+      <ConfirmDialog
+        open={deleteCollectionConfirm !== null}
+        title={t("collectionsPage.deleteCollectionTitle")}
+        message={t("common.confirmDeleteMessage", {
+          name: deleteCollectionConfirm?.name ?? "",
+        })}
+        onConfirm={() => {
+          if (!deleteCollectionConfirm) return;
+          treeHook.handleDeleteCollection(deleteCollectionConfirm.id);
+          setDeleteCollectionConfirm(null);
+        }}
+        onCancel={() => setDeleteCollectionConfirm(null)}
+        isConfirming={deleteCollectionMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteItemConfirm !== null}
+        title={t("collectionsPage.deleteItemTitle")}
+        message={t("common.confirmDeleteMessage", {
+          name: deleteItemConfirm?.name ?? "",
+        })}
+        onConfirm={() => {
+          if (!deleteItemConfirm) return;
+          treeHook.handleDeleteItem(deleteItemConfirm);
+          setDeleteItemConfirm(null);
+        }}
+        onCancel={() => setDeleteItemConfirm(null)}
+        isConfirming={deleteItemMutation.isPending}
       />
     </Box>
   );

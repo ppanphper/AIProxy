@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { useAppPreferencesStore } from "@/app/store/app-preferences.store";
 import { AppShellActivityBar } from "@/components/layout/AppShellActivityBar";
 import { AppShellDialogs } from "@/components/layout/AppShellDialogs";
 import { AppShellStatusBar } from "@/components/layout/AppShellStatusBar";
@@ -18,10 +19,12 @@ import {
   useWindowControls,
   useZoomControl,
 } from "@/components/layout/hooks";
-import { isMacPlatform, isTauriRuntime } from "@/components/layout/hooks/helpers";
+import { getErrorMessage, isMacPlatform, isTauriRuntime } from "@/components/layout/hooks/helpers";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useBreakpointEvents } from "@/features/breakpoints/use-breakpoint-events";
 import { useBreakpointStore } from "@/features/breakpoints/breakpoint.store";
 import { BreakpointInterceptPanel } from "@/features/breakpoints/components/BreakpointInterceptPanel";
+import { useClearSessions } from "@/features/proxy-status/use-proxy-status";
 import { SetupWizard } from "@/features/setup-wizard/SetupWizard";
 import { useI18n } from "@/i18n";
 import { useSessionEvents } from "@/features/sessions/use-session-events";
@@ -50,6 +53,32 @@ export function AppShell() {
 
   // --- Snackbar message shared across hooks ---
   const [menuSnackbarMessage, setMenuSnackbarMessage] = useState<string | null>(null);
+
+  // --- Clear-all-sessions confirmation (menu entry) ---
+  const [clearSessionsConfirmOpen, setClearSessionsConfirmOpen] = useState(false);
+  const [clearSessionsDontAskAgain, setClearSessionsDontAskAgain] = useState(false);
+  const skipClearSessionsConfirm = useAppPreferencesStore((s) => s.skipClearSessionsConfirm);
+  const setSkipClearSessionsConfirm = useAppPreferencesStore((s) => s.setSkipClearSessionsConfirm);
+  const clearSessionsMutation = useClearSessions();
+
+  function handleConfirmClearAllSessions() {
+    clearSessionsMutation.mutate(undefined, {
+      onSuccess: () => setMenuSnackbarMessage(t("sessionsPage.clearSessionsDone")),
+      onError: (error) =>
+        setMenuSnackbarMessage(getErrorMessage(error, t("common.errors.generic"))),
+    });
+  }
+
+  // Session data is re-capturable, so users may opt out of the confirm dialog
+  // (persisted preference, re-enablable in Settings). See UI_GUIDELINES §11.4.
+  function requestClearAllSessions() {
+    if (skipClearSessionsConfirm) {
+      handleConfirmClearAllSessions();
+      return;
+    }
+    setClearSessionsDontAskAgain(false);
+    setClearSessionsConfirmOpen(true);
+  }
 
   // --- Global notification queue (fed by reportCommandFailure etc.) ---
   const notificationQueue = useNotificationStore((s) => s.queue);
@@ -107,6 +136,7 @@ export function AppShell() {
     handleAdbClearProxy,
     runWindowCommand,
     onSnackbarMessage: setMenuSnackbarMessage,
+    onRequestClearAllSessions: requestClearAllSessions,
   });
 
   // --- Zoom control ---
@@ -270,6 +300,25 @@ export function AppShell() {
       <SetupWizard />
 
       <UpdateDialog />
+
+      <ConfirmDialog
+        open={clearSessionsConfirmOpen}
+        title={t("sessionsPage.clearSessionsTitle")}
+        message={t("sessionsPage.clearSessionsConfirm")}
+        confirmLabel={t("common.actions.clearSessions")}
+        dontAskAgainLabel={t("sessionsPage.clearSessionsDontAskAgain")}
+        dontAskAgainChecked={clearSessionsDontAskAgain}
+        onDontAskAgainChange={setClearSessionsDontAskAgain}
+        onConfirm={() => {
+          if (clearSessionsDontAskAgain) {
+            setSkipClearSessionsConfirm(true);
+          }
+          setClearSessionsConfirmOpen(false);
+          handleConfirmClearAllSessions();
+        }}
+        onCancel={() => setClearSessionsConfirmOpen(false)}
+        isConfirming={clearSessionsMutation.isPending}
+      />
 
       <Snackbar
         key={menuSnackbarMessage ?? activeNotification?.id ?? "snackbar"}

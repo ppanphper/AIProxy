@@ -232,19 +232,18 @@ App Shell
 - 当前激活项突出显示
 - 支持图标 + 文本组合
 
-导航项建议：
+导航项建议（与 `docs/PRD.md` 8.1、实际路由保持一致）：
 
 - Sessions
-- Compose
 - Insights
-- Breakpoints
-- Rewrite Rules
-- Map Local
-- Map Remote
-- DNS
+- Compose
+- Collections
+- Compare
+- Rules（统一承载 Breakpoints / Rewrite Rules / Map Local / Map Remote / DNS Mapping / Script Rules）
 - Throttling
 - Certificates
 - Settings
+- Docs
 
 ## 8.4 主工作台规范
 
@@ -423,7 +422,8 @@ Sessions Page
   - 跳转：`Breakpoints...`、`Map Rules...`
 - 菜单动作完成后应自动关闭
 - 复制类动作必须给出 `Snackbar` 成功反馈
-- `Focus` 与 `Ignore` 属于当前页面的临时视图状态，不应默认持久化
+- `Focus` 与 `Ignore` 属于视图状态，但**持久化到 localStorage**（`aiproxy.sessions.focusedHosts` / `ignoredHosts`）：高频抓包的固定 domain 不应每次重新设置；持久化 + 数据滤除意味着取消入口必须在被过滤数据之外（见下条 chips）
+- 生效中的 `Focus` / `Ignore` / `Throttled` 过滤必须在会话列表上方以**单行可移除 chips** 呈现(`SessionFilterChips`)：每个 focused/ignored host 一枚 chip（点 × 移除），throttled 过滤一枚总开关 chip；同一类别超过 3 个 host 时聚合成一枚总 chip（如"已忽略 7 个 host"），点击弹出菜单可逐项移除或"全部清除"；被 ignore 的 host 已从数据中滤除，右键菜单不可达，chips 行是其唯一可靠的取消入口；无过滤时不渲染该行，chips 行绝对不换行增长。
 - `Breakpoints...` 与 `Map Rules...` 当前都跳转到 `Rules Page`，后续可升级为深链到具体 tab
 
 ### 会话树节点建议
@@ -435,8 +435,8 @@ Sessions Page
 
 ### 详情面板标签
 
-- Request：`Overview / Query / Headers / Body / Form / Raw`
-- Response：`Overview / Preview / Headers / Text / JSON / JSON Text / Raw`
+- Request：`Query / Form / Body / Headers / Raw`
+- Response：`Overview / Preview / Messages / Headers / Text / JSON / JSON Text / Raw / Automation / Trailers`（按 MIME 类型与协议动态显示；`Messages` 仅 WebSocket 会话，`Trailers` 仅响应携带 HTTP trailer 时显示，`Automation` 展示规则命中记录）
 - `Preview` Tab 仅在响应 MIME 类型为图片（`image/*`）、音频（`audio/*`）或视频（`video/*`）时显示
 - 图片预览使用 `<img>` 渲染 data URI，支持 `object-fit: contain` 自适应容器，底部展示尺寸、MIME 类型、文件大小
 - 音频 / 视频预览使用原生 HTML5 `<audio>` / `<video>` 控件
@@ -474,21 +474,20 @@ Compose Page
 ├─ Toolbar
 │  ├─ Send Button (variant=”contained”, 含 loading spinner)
 │  └─ Export cURL Button (variant=”outlined”, 复制到剪贴板 + Snackbar 确认)
-├─ Two-Column Grid (8fr | 4fr)
+├─ 上下分栏（垂直 Stack，请求在上、响应在下，各自内部滚动）
 │  ├─ SectionCard “Request Builder”
 │  │  ├─ Method Selector (Select: GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS)
 │  │  ├─ URL Input (OutlinedInput, Enter 键触发发送)
 │  │  └─ Tabs: Headers | Body | Query
 │  │     ├─ Headers: EditableKeyValueTable
-│  │     ├─ Body: TextField multiline
+│  │     ├─ Body: ToggleButtonGroup (none | form-data | x-www-form-urlencoded | raw)
+│  │     │  ├─ none: 空态提示文案
+│  │     │  ├─ form-data / x-www-form-urlencoded: EditableKeyValueTable
+│  │     │  └─ raw: 语言 Select (Text / JSON / XML / HTML / JavaScript) + multiline TextField
 │  │     └─ Query: EditableKeyValueTable (自动从 URL 解析 query params)
 │  └─ SectionCard “Response Preview”
 │     ├─ InspectorSummaryBar (复用 Sessions Inspector 组件)
-│     └─ Tabs: Overview | Headers | Body | Timing
-│        ├─ Overview: InspectorDefinitionList
-│        ├─ Headers: InspectorKeyValueTable
-│        ├─ Body: SearchableCodeBlock
-│        └─ Timing: InspectorDefinitionList
+│     └─ Tabs 复用 Sessions Inspector 的响应标签集合（Overview / Headers / Body / Timing 等，见「详情面板标签」）
 └─ Snackbar (cURL 复制确认)
 ```
 
@@ -781,7 +780,7 @@ Settings Page
 
 当前实现说明：
 
-- 当前桌面端先落地 `Proxy Presets`、`Upstream Proxy`、`SSL Proxying`、`Language & Region` 与 `Appearance` 五个设置区块
+- 当前桌面端已落地 `Proxy Presets`、`Upstream Proxy`、`SSL Proxying`、`AI Model`、`General`、`Dangerous Action Confirmations`、`Software Updates` 与 `About` 八个设置区块（单一滚动页面，未启用左侧设置导航；语言、主题与字体等偏好统一并入 `General` 区块）
 - 后续如扩展左侧设置导航，需保持当前字段归属不变
 
 - `ProxyPresetsSection`：代理预设管理，`SectionCard` 内含预设列表（`List` + `ListItemButton`，活跃预设有 `CheckCircleRoundedIcon` 标记，hover 阴影提升）、操作栏（New Preset / Apply / Save 按钮）、展开式编辑表单（name, port, SSL Switch）。数据由 `useWorkspaces` 等 hooks 驱动，底层继续复用 workspace 命名接口
@@ -877,7 +876,8 @@ Settings Page
 - 成功：`Snackbar`
 - 错误：`Snackbar + 详细错误入口`
 - 长任务：状态栏 + 进度提示
-- 危险操作：`Dialog Confirm`
+- 危险操作：`Dialog Confirm` — 统一使用 `components/shared/ConfirmDialog.tsx`(受控 props;确认键 `color="error" variant="contained"`;`isConfirming` 接 mutation pending)。所有删除规则/断点/限速规则/集合/请求条目与 Clear All Sessions 入口(菜单 + Sessions 页按钮)必须先经确认;清空成功后给 `Snackbar` 反馈。
+- 「不再确认」opt-out 例外：仅允许用于可再生数据的清空操作。当前唯一入口是 Clear All Sessions(会话可重新捕获)：确认框内提供 checkbox「不再确认清空会话」，勾选并确认后持久化到 `aiproxy.app-preferences` 的 `skipClearSessionsConfirm`(默认 false)，对菜单与 Sessions 页两个入口同时生效；Settings 页「危险操作确认」区提供可见开关恢复确认。不可恢复的删除(集合子树、规则、环境组等)一律禁止提供该选项——能被永久关闭的防线不是防线。
 
 ## 12. 状态设计
 
@@ -1037,6 +1037,7 @@ Insights Page
 - 常驻清单卡(`SetupChecklistCard`)挂在 Sessions 页顶部,`!captureReady` 时显示,`captureReady` 达成即消失;回退时自动重现,不重弹模态。
 - 向导顶部用 `LinearProgress` + "Step N/8" 表达进度,避免 8 步全列 Stepper 造成拥挤。
 - 常驻清单卡的主按钮随 `nextAction` 动态化:卡在"启动代理"步骤时为"启动代理"(而非固定"打开证书"),调用 `useStartProxy`;该步启动失败且为端口占用时,清单内 inline 显示端口占用 Alert 并提供"更改端口"(复用 AppShell 端口对话框,经 `proxy-start.store` 桥接)。其余步骤仍为"打开证书"。
+- **首启不自动接管系统代理**:启动 auto-start 仅拉起代理监听;系统代理只在 workspace 持久化字段 `systemProxyEnabled` 为 true(用户此前显式开启过)时恢复。新用户在信任证书之前系统流量不被劫持,由向导 routing 步引导主动开启。
 
 ### 21.2 跳过 / 完成 / 回退语义
 

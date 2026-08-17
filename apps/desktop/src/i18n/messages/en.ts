@@ -32,6 +32,7 @@ export const enMessages = {
       stopProxy: "Stop Proxy",
       switchWorkspace: "Switch Workspace",
     },
+    confirmDeleteMessage: 'Delete "{{name}}"? This action cannot be undone.',
     empty: {
       noData: "No data available.",
     },
@@ -188,6 +189,7 @@ export const enMessages = {
     fontOptionSerif: "Serif",
     fontOptionSystem: "System Default",
     fontSizeLabel: "Font Size",
+    generalSectionTitle: "General",
     languageLabel: "Display Language",
     languageSectionTitle: "Language & Region",
     languageOptionEn: "English",
@@ -207,6 +209,12 @@ export const enMessages = {
     aiTest: "Test Connection",
     aiTesting: "Testing...",
     aiTimeout: "Timeout (ms)",
+    clearSessionsConfirmLabel: "Ask before clearing all sessions",
+    clearSessionsConfirmDescription:
+      "When off, Clear All Sessions from the menu or the Sessions toolbar takes effect immediately.",
+    confirmSectionTitle: "Dangerous Action Confirmations",
+    confirmSectionDescription:
+      "Control which destructive actions ask for confirmation before running.",
     systemProxyRecoveryWarning:
       "AIProxy found a pending system proxy recovery snapshot but could not restore it automatically: {{message}}",
     themeLabel: "Appearance Theme",
@@ -393,6 +401,8 @@ export const enMessages = {
     breakpointRulesDescription:
       "Rules are evaluated in order. The first matching rule triggers the breakpoint.",
     breakpointRulesTitle: "Breakpoint Rules",
+    deleteBreakpointTitle: "Delete Breakpoint",
+    deleteRuleTitle: "Delete Rule",
     description: "Manage breakpoints and request/response interception rules.",
     empty: "No rules defined. Add a rule or use the quick actions above.",
     quickBreakpointDescription:
@@ -961,6 +971,11 @@ export const enMessages = {
       sessionCount: "{{count}} captured requests",
       sessionTitle: "Session {{index}}",
     },
+    clearSessionsConfirm:
+      "This permanently deletes every captured session. This action cannot be undone.",
+    clearSessionsDontAskAgain: "Clear sessions without asking again",
+    clearSessionsDone: "All sessions cleared",
+    clearSessionsTitle: "Clear All Sessions",
     description:
       "Inspect captured traffic, keep the current filter context, and export exactly the slice you need.",
     detailLoadError: "Unable to load the selected session detail from the desktop runtime.",
@@ -1107,6 +1122,7 @@ export const enMessages = {
     customTitle: "Custom Profiles",
     customUntitled: "Untitled Profile",
     deleteRule: "Delete",
+    deleteRuleTitle: "Delete Rule",
     description:
       "Switch between realistic network presets or fine-tune upload, download, latency, and packet loss for a specific test case.",
     disableGlobal: "Disable Throttling",
@@ -1213,12 +1229,16 @@ export const enMessages = {
     runningWithPort: "Proxy Running :{{port}}",
   },
   sessionExplorer: {
+    clearAllFocusedHosts: "Clear all focused hosts",
+    clearAllIgnoredHosts: "Clear all ignored hosts",
     emptyDescription:
       "Start the proxy, then open a page or app request. Captured traffic will appear here in real time.",
     emptyTip:
       "Tip: plain HTTP is the fastest way to verify capture before turning on SSL interception.",
     emptyTitle: "No captured sessions yet.",
     filterPlaceholder: "Filter",
+    focusedHostsSummary: "Focused ({{count}})",
+    ignoredHostsSummary: "Ignored ({{count}})",
     loading: "Loading captured sessions...",
     pending: "Pending",
     resourceKinds: {
@@ -1236,9 +1256,12 @@ export const enMessages = {
       websocket: "WebSocket",
     },
     searchPlaceholder: "Search domain or path",
+    showAllSessions: "Show all sessions",
+    stopIgnoringHost: "Stop ignoring {{host}}",
     tooltipPending: "{{method}} {{url}} · Pending",
     tooltipResolved: "{{method}} {{url}} · {{statusCode}} · {{kind}}",
     unknownHost: "<unknown>",
+    unfocusHost: "Stop focusing {{host}}",
     unfocusedGroup: "Unfocused",
   },
   inspector: {
@@ -1668,9 +1691,11 @@ export const enMessages = {
     folderName: "Folder name",
     globalVariables: "Global Variables",
     environmentVariables: "Variables",
+    deleteCollectionTitle: "Delete Collection",
     deleteEnvironment: "Delete Environment",
     deleteEnvironmentConfirm: 'Are you sure you want to delete "{{name}}"?',
     deleteEnvironmentTitle: "Delete Environment",
+    deleteItemTitle: "Delete Request",
     environmentDeleted: "Environment deleted",
     variablesSaved: "Variables saved",
     collectionCount: "{{count}} collections",
