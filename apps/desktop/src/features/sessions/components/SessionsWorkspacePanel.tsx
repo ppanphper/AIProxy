@@ -11,7 +11,10 @@ import type {
   RequestInspectorTab,
   ResponseInspectorTab,
 } from "@/features/sessions/components/session-inspector.helpers";
-import type { SessionHostGroup } from "@/features/sessions/session-explorer.helpers";
+import type {
+  SessionHostGroup,
+  SessionPathBranch,
+} from "@/features/sessions/session-explorer.helpers";
 
 type SessionsWorkspacePanelProps = {
   activeContainerId: string;
@@ -32,6 +35,7 @@ type SessionsWorkspacePanelProps = {
   isLoading: boolean;
   onAddContainer: () => void;
   onCloseContainer: (containerId: string) => void;
+  onContextMenuFolder: (node: SessionPathBranch, event: React.MouseEvent) => void;
   onContextMenuHost: (host: string, event: React.MouseEvent) => void;
   onContextMenuSession: (session: SessionSummary, event: React.MouseEvent) => void;
   onCopyCurl: (() => void) | undefined;
@@ -77,6 +81,7 @@ export function SessionsWorkspacePanel({
   isLoading,
   onAddContainer,
   onCloseContainer,
+  onContextMenuFolder,
   onContextMenuHost,
   onContextMenuSession,
   onCopyCurl,
@@ -172,6 +177,7 @@ export function SessionsWorkspacePanel({
               isLoading={isLoading}
               onDisableThrottledOnly={onDisableThrottledOnly}
               onDomainFilterChange={onDomainFilterChange}
+              onContextMenuFolder={onContextMenuFolder}
               onContextMenuHost={onContextMenuHost}
               onContextMenuSession={onContextMenuSession}
               onSelectSession={onSelectSession}
